@@ -879,36 +879,6 @@ La intención es que cada usuario pueda partir del sistema base y configurar sus
 
 ---
 
-# Pruebas realizadas
-
-Para comprobar el funcionamiento de ESP Remote se realizaron pruebas de:
-
-- Comunicación ESP-NOW entre ESP8266 y ESP32.
-- Transmisión mediante Broadcast.
-- Dos entradas digitales mediante switches.
-- Entrada analógica mediante potenciómetro.
-- Tres LEDs como salidas de prueba.
-- Salidas digitales.
-- Salidas PWM.
-- Configuración mediante interfaz web.
-- Acceso desde celular.
-- Acceso desde computadora.
-- Dashboard.
-- Creación y eliminación de módulos.
-- Módulos con entrada física.
-- Módulos sin entrada física.
-- Modo switch.
-- Modo pulsador.
-- Retención temporizada.
-- Inversión de lógica.
-- Control PWM.
-- Prueba de salidas desde la interfaz.
-- Filtro por MAC Address.
-- Persistencia mediante EEPROM.
-- Asociación configurable entre entradas y salidas.
-
----
-
 # Autoría
 
 **Gonzalo Lucero**
