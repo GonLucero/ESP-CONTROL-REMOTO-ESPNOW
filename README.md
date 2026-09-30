@@ -10,7 +10,7 @@ Está pensado especialmente para artistas, músicos, performers, realizadores au
 
 En la versión actual:
 
-- **ESP8266:** funciona como emisor.
+- **ESP8266 NodeMCU:** funciona como emisor.
 - **ESP32:** funciona como receptor y servidor de la interfaz web.
 - **ESP-NOW:** realiza la comunicación inalámbrica entre ambas placas.
 - **Interfaz web:** permite configurar las relaciones entre entradas y salidas.
@@ -19,27 +19,90 @@ En la versión actual:
 
 # Índice
 
-1. Objetivo
-2. Arquitectura
-3. Tecnologías utilizadas
-4. Hardware del prototipo
-5. Funcionamiento
-6. ESP8266 emisor
-7. ESP32 receptor
-8. Comunicación ESP-NOW
-9. Interfaz web
-10. Cards
-11. Control desde la web
-12. Filtro por MAC
-13. Configuración persistente
-14. Conexión del prototipo
-15. Instalación
-16. Puesta en marcha
-17. Ejemplo de configuración
-18. Demostración
-19. Aplicaciones posibles
-20. Pruebas realizadas
-21. Autoría
+1. Acceso al sistema
+2. Objetivo
+3. Arquitectura
+4. Tecnologías utilizadas
+5. Hardware del prototipo
+6. Funcionamiento general
+7. ESP8266 emisor
+8. ESP32 receptor
+9. Comunicación ESP-NOW
+10. Modo Broadcast
+11. Interfaz web
+12. Concepto de Módulos
+13. Modos digitales
+14. Control PWM
+15. Dashboard
+16. Filtro por MAC Address
+17. Configuración persistente
+18. Conexión electrónica
+19. Instalación del entorno
+20. Programación de las placas
+21. Puesta en marcha
+22. Ejemplo de configuración
+23. Demostración
+24. Aplicaciones posibles
+25. Pruebas realizadas
+26. Autoría
+
+---
+
+# Acceso al sistema
+
+Una vez programadas y encendidas las placas, el **ESP32 receptor genera automáticamente una red WiFi propia**.
+
+## 1. Conectarse a la red WiFi
+
+Desde una computadora, celular o tablet buscar una red con el siguiente formato:
+
+```text
+ESP-REMOTE-XXXX
+```
+
+`XXXX` corresponde a los últimos caracteres utilizados para identificar la dirección MAC del ESP32.
+
+Por ejemplo:
+
+```text
+ESP-REMOTE-A4F2
+```
+
+La contraseña de la red es:
+
+```text
+12345678
+```
+
+## 2. Acceder a la interfaz
+
+Una vez conectado a la red `ESP-REMOTE-XXXX`, abrir un navegador e ingresar:
+
+```text
+http://192.168.4.1
+```
+
+El procedimiento es el mismo desde una computadora, celular o tablet.
+
+```text
+CELULAR / COMPUTADORA
+        │
+        │ WiFi
+        ▼
+  ESP-REMOTE-XXXX
+        │
+        ▼
+   192.168.4.1
+        │
+        ▼
+     ESP Remote
+```
+
+No es necesario tener conexión a Internet.
+
+El ESP32 genera su propia red WiFi y aloja localmente la interfaz web.
+
+> Si el celular indica que la red no tiene acceso a Internet, se debe permanecer conectado igualmente. Esto es normal, ya que la red se utiliza para comunicarse directamente con el ESP32.
 
 ---
 
@@ -57,6 +120,7 @@ El sistema permite:
 - Crear configuraciones sin recompilar el firmware.
 - Controlar salidas directamente desde un celular o computadora.
 - Guardar la configuración para conservarla después de reiniciar el dispositivo.
+- Facilitar el uso de sistemas embebidos a personas sin conocimientos avanzados de programación.
 
 ---
 
@@ -66,20 +130,21 @@ La arquitectura actual del sistema es:
 
 ```text
 Entradas físicas
-      │
-      ▼
-ESP8266 - EMISOR
-      │
-      │ ESP-NOW Broadcast
-      ▼
+2 switches + 1 potenciómetro
+        │
+        ▼
+ESP8266 NodeMCU - EMISOR
+        │
+        │ ESP-NOW
+        ▼
 ESP32 - RECEPTOR
-      │
-      ├── Salidas digitales / PWM
-      │
-      └── WiFi + Interfaz Web
-                │
-                ▼
-        Celular / Computadora
+        │
+        ├── Salidas digitales / PWM
+        │
+        └── WiFi + Interfaz Web
+                    │
+                    ▼
+            Celular / Computadora
 ```
 
 Las placas no necesitan una conexión física entre ellas para comunicarse.
@@ -92,10 +157,12 @@ Las placas no necesitan una conexión física entre ellas para comunicarse.
 
 - ESP8266 NodeMCU
 - ESP32
-- Pulsadores
-- Potenciómetro
+- 2 switches
+- 1 potenciómetro
 - LEDs para pruebas
 - Resistencias
+- Protoboard
+- Cables
 
 ## Software y protocolos
 
@@ -114,84 +181,80 @@ Las placas no necesitan una conexión física entre ellas para comunicarse.
 
 Para validar el funcionamiento se construyó un circuito de prueba utilizando:
 
-- 1 ESP8266
+- 1 ESP8266 NodeMCU
 - 1 ESP32
-- 3 pulsadores
+- 2 switches
 - 1 potenciómetro
-- LEDs
+- LEDs de prueba
 - Resistencias de 220 Ω
-- Protoboard y cables
+- Protoboard
+- Cables
 
-Estos componentes corresponden solamente al **prototipo de prueba**.
+Estos componentes corresponden solamente al **prototipo utilizado para probar y validar el funcionamiento del sistema**.
 
-ESP Remote no está pensado exclusivamente para controlar LEDs mediante pulsadores y potenciómetros. El sistema puede adaptarse a otros sensores, actuadores y dispositivos compatibles con las entradas y salidas disponibles.
+ESP Remote no está limitado a switches, potenciómetros o LEDs. El sistema puede adaptarse a otros sensores, actuadores y dispositivos compatibles.
 
 ---
 
-# Funcionamiento
+# Funcionamiento general
 
-El ESP8266 lee las entradas físicas conectadas.
+El ESP8266 funciona como **emisor** y lee las entradas físicas.
 
-Cuando detecta un cambio, genera un mensaje y lo transmite mediante **ESP-NOW**.
+En el prototipo se utilizan:
 
-El ESP32 recibe ese mensaje y busca si existe una card configurada para esa entrada.
+```text
+2 switches
++
+1 potenciómetro
+```
 
-Si encuentra una relación válida, ejecuta la salida correspondiente.
+Cuando el ESP8266 detecta un cambio en una entrada, genera un mensaje y lo transmite inalámbricamente mediante ESP-NOW.
+
+El ESP32 funciona como **receptor**.
+
+Cuando recibe el mensaje, identifica la entrada que produjo el cambio y busca si existe un módulo configurado para esa entrada.
+
+Si encuentra una relación, ejecuta la salida correspondiente.
 
 Por ejemplo:
 
 ```text
-Pulsador
+Switch
    │
-GPIO5 - ESP8266
+GPIO ESP8266
    │
    │ ESP-NOW
    ▼
-ESP32
+ ESP32
    │
-GPIO25
+GPIO de salida
    │
    ▼
-Salida
+Dispositivo
 ```
 
-La relación entre GPIO5 y GPIO25 no tiene que estar escrita de forma fija en el código: puede configurarse desde la interfaz web.
+La relación entre una entrada y una salida puede modificarse desde la interfaz web sin tener que cambiar el código.
 
 ---
 
-# ESP8266 - Emisor
+# ESP8266 NodeMCU - Emisor
 
 El ESP8266 funciona como dispositivo emisor.
 
-La versión actual del firmware permite leer:
+En el prototipo final se utilizan:
 
-- 3 entradas digitales.
-- 1 entrada analógica.
+- 2 entradas digitales para los switches.
+- 1 entrada analógica para el potenciómetro.
 
-Las entradas digitales utilizan `INPUT_PULLUP`, por lo que los pulsadores se conectan entre el GPIO correspondiente y GND.
-
-Configuración utilizada actualmente:
+La entrada analógica utiliza:
 
 ```text
-D1 / GPIO5  → Entrada digital
-D2 / GPIO4  → Entrada digital
-D5 / GPIO14 → Entrada digital
-
-A0 → Entrada analógica
+A0
 ```
 
-El ESP8266 lee A0 en un rango aproximado de:
+Cuando cambia el estado de una entrada, el ESP8266 transmite la información mediante ESP-NOW.
 
-```text
-0 - 1023
-```
-
-Los cambios detectados se envían automáticamente mediante ESP-NOW.
-
-Para evitar lecturas innecesarias se implementaron:
-
-- debounce para las entradas digitales;
-- umbral mínimo de cambio para la entrada analógica.
+Esto permite enviar tanto estados digitales como valores variables obtenidos desde una entrada analógica.
 
 ---
 
@@ -199,28 +262,19 @@ Para evitar lecturas innecesarias se implementaron:
 
 El ESP32 cumple dos funciones principales:
 
-1. Recibir los mensajes ESP-NOW.
-2. Generar la interfaz web de configuración y control.
+1. Recibir los mensajes enviados mediante ESP-NOW.
+2. Generar la red WiFi y la interfaz web de ESP Remote.
 
-Cuando recibe un mensaje, compara:
+Cuando recibe información del ESP8266, compara el tipo y GPIO de entrada con los módulos configurados.
 
-- tipo de entrada;
-- GPIO de entrada;
+Si encuentra una coincidencia, controla la salida correspondiente.
 
-con las cards configuradas.
+El ESP32 puede trabajar con:
 
-Si encuentra una coincidencia, ejecuta la salida correspondiente.
+- Salidas digitales.
+- Salidas PWM.
 
-El ESP32 permite trabajar con:
-
-- salidas digitales;
-- salidas PWM.
-
-Los valores analógicos recibidos desde el ESP8266 en rango `0-1023` son adaptados a un rango PWM de:
-
-```text
-0 - 255
-```
+También permite controlar salidas directamente desde el dashboard web.
 
 ---
 
@@ -228,16 +282,16 @@ Los valores analógicos recibidos desde el ESP8266 en rango `0-1023` son adaptad
 
 La comunicación entre las placas utiliza **ESP-NOW**.
 
-Cada mensaje contiene:
+ESP-NOW permite que los microcontroladores se comuniquen directamente sin depender de un router WiFi ni de una conexión a Internet.
 
-```text
-Tipo de entrada
-GPIO de entrada
-Valor digital
-Valor analógico
-```
+Cada mensaje permite identificar:
 
-De esta forma, el receptor puede identificar qué entrada cambió y qué valor debe utilizar.
+- Tipo de entrada.
+- GPIO de entrada.
+- Valor digital.
+- Valor analógico.
+
+De esta manera, el receptor puede determinar qué entrada generó el evento y utilizar su valor para controlar la salida configurada.
 
 ---
 
@@ -249,66 +303,70 @@ El ESP8266 transmite utilizando la dirección:
 FF:FF:FF:FF:FF:FF
 ```
 
-Esto corresponde al modo **Broadcast**.
+Esto corresponde a una transmisión **Broadcast**.
 
-El emisor no necesita conocer previamente la dirección MAC del ESP32 receptor.
+El emisor no necesita conocer previamente la dirección MAC del receptor.
 
-Los dispositivos deben utilizar el mismo canal ESP-NOW. En esta versión se utiliza:
+Cualquier receptor compatible que se encuentre escuchando en el mismo canal puede recibir el mensaje.
 
-```text
-Canal 1
-```
+El ESP32 puede posteriormente decidir si acepta o ignora esos mensajes mediante el filtro por MAC Address.
 
 ---
 
 # Interfaz web
 
-El ESP32 crea automáticamente su propia red WiFi.
+La interfaz web se encuentra alojada directamente en el ESP32.
 
-El nombre tiene el formato:
+Para ingresar:
 
 ```text
+WiFi:
 ESP-REMOTE-XXXX
-```
 
-`XXXX` corresponde a los últimos caracteres utilizados para identificar al ESP32.
-
-La contraseña es:
-
-```text
+Contraseña:
 12345678
-```
 
-Una vez conectado a esa red, la interfaz se encuentra en:
-
-```text
+Dirección:
 http://192.168.4.1
 ```
 
-No es necesario instalar ninguna aplicación.
+Desde la interfaz se puede:
 
-La interfaz puede utilizarse desde:
+- Crear módulos.
+- Editar módulos.
+- Eliminar módulos.
+- Seleccionar GPIO.
+- Configurar entradas.
+- Configurar salidas.
+- Probar salidas.
+- Configurar PWM.
+- Configurar el comportamiento de las entradas digitales.
+- Configurar el filtro por MAC.
+- Controlar salidas desde el dashboard.
 
-- celular;
-- tablet;
-- notebook;
-- computadora con WiFi.
+El objetivo de esta interfaz es que gran parte de la configuración pueda realizarse sin modificar directamente el código fuente.
 
 ---
 
-# Cards
+# Concepto de Módulos
 
-El sistema utiliza el concepto de **cards**.
+El sistema utiliza el concepto de **módulos**.
 
-Cada card representa una configuración independiente de control.
+Cada módulo representa una relación configurable entre una entrada y una salida.
 
-La versión actual permite crear hasta:
+Por ejemplo:
 
 ```text
-8 cards
+Entrada ESP8266
+      │
+      ▼
+    MÓDULO
+      │
+      ▼
+Salida ESP32
 ```
 
-Una card puede definir:
+Un módulo permite definir:
 
 - Nombre.
 - Uso o no de una entrada física.
@@ -316,24 +374,32 @@ Una card puede definir:
 - GPIO de entrada.
 - Tipo de salida.
 - GPIO de salida.
-- Modo llave.
+- Modo switch.
 - Modo pulsador.
 - Tiempo de retención.
 - Lógica invertida.
 - Salida digital.
 - Salida PWM.
 
-Los GPIO ya utilizados por otras cards se identifican desde la interfaz para evitar configuraciones duplicadas.
+La versión actual permite crear hasta:
 
-También existe una opción **Manual** que permite ingresar un GPIO directamente.
+```text
+8 módulos
+```
+
+Cada módulo puede configurarse de manera independiente.
+
+Los GPIO utilizados por otros módulos se identifican desde la interfaz para evitar configuraciones duplicadas.
+
+También existe una opción **Manual** que permite ingresar directamente un GPIO.
 
 ---
 
-# Cards sin entrada física
+# Módulos sin entrada física
 
-Una de las funciones incorporadas en la versión final es la posibilidad de crear una card **sin entrada física**.
+También es posible crear un módulo sin asociarlo a una entrada física.
 
-Esto permite controlar una salida directamente desde la interfaz web.
+En ese caso, la salida puede controlarse directamente desde el dashboard utilizando un celular o una computadora.
 
 Por ejemplo:
 
@@ -350,30 +416,32 @@ GPIO
 Salida
 ```
 
-De esta manera ESP Remote también puede utilizarse como sistema de control remoto desde un celular o computadora.
+Esto permite utilizar ESP Remote no solamente como receptor de controles físicos, sino también como sistema de control remoto mediante una interfaz web.
 
 ---
 
 # Modos digitales
 
-Las cards digitales pueden configurarse en diferentes modos.
+Las entradas digitales pueden configurarse con diferentes comportamientos.
 
-## Modo llave
+## Modo switch
 
-La salida mantiene el estado recibido por la entrada.
+La salida responde al estado del switch.
 
 ```text
-Entrada ON  → Salida ON
-Entrada OFF → Salida OFF
+Switch ON  → Salida ON
+Switch OFF → Salida OFF
 ```
 
 ## Modo pulsador
 
-La salida se activa al presionar el pulsador.
+Una entrada digital también puede configurarse para funcionar como pulsador.
 
-Cuando el pulsador se libera comienza a contar el tiempo de retención configurado antes de apagar la salida.
+En este modo es posible definir un tiempo de retención.
 
-Ejemplo:
+Al liberar el pulsador comienza a contar el tiempo configurado antes de apagar la salida.
+
+Por ejemplo:
 
 ```text
 Retención: 1000 ms
@@ -385,117 +453,119 @@ La salida permanece activa durante un segundo después de liberar el pulsador.
 
 # Control PWM
 
-Las entradas analógicas pueden utilizarse para controlar una salida PWM.
-
-En el prototipo:
+El potenciómetro permite generar un valor analógico desde el ESP8266.
 
 ```text
 Potenciómetro
       │
       ▼
-A0 ESP8266
+     A0
       │
-   0 - 1023
+      ▼
+ESP8266
       │
    ESP-NOW
       ▼
 ESP32
       │
-   0 - 255
       ▼
 Salida PWM
 ```
 
-Esto permite controlar de manera gradual elementos compatibles con PWM.
+El valor recibido puede utilizarse para controlar de manera progresiva una salida compatible con PWM.
+
+Por ejemplo, puede utilizarse para modificar la intensidad de un LED durante las pruebas.
 
 ---
 
 # Dashboard
 
-La página principal funciona como un dashboard.
+La pantalla principal funciona como un dashboard.
 
-Desde allí se visualizan las cards configuradas y el estado de cada salida.
+Desde allí se visualizan los módulos configurados y el estado de las salidas.
 
-Dependiendo de la configuración, también es posible:
+Dependiendo de la configuración de cada módulo se puede:
 
-- encender y apagar salidas digitales;
-- accionar salidas configuradas como pulsadores;
-- modificar una salida PWM mediante un control deslizante.
+- Encender una salida.
+- Apagar una salida.
+- Accionar una salida digital.
+- Modificar un valor PWM.
 
-Las acciones se realizan sin necesidad de recargar completamente la página.
+Las acciones pueden realizarse directamente desde un celular, tablet o computadora.
 
 ---
 
-# Configuración y prueba de salidas
+# Prueba de salidas
 
-Desde la pantalla de configuración es posible probar las salidas antes de utilizar el sistema definitivo.
+Desde la pantalla de configuración también es posible probar las salidas.
 
-Para salidas digitales se dispone de controles de:
+Para las salidas digitales se dispone de controles para encenderlas y apagarlas.
 
-```text
-ON / OFF
-```
+Para las salidas PWM se puede modificar directamente el valor de salida.
 
-Para salidas PWM se puede modificar directamente el valor de salida.
-
-Esto permite comprobar conexiones y GPIO desde la propia interfaz.
+Esto permite verificar el funcionamiento de un GPIO antes de utilizarlo dentro del sistema definitivo.
 
 ---
 
 # Filtro por MAC Address
 
-Por defecto, el receptor puede aceptar los mensajes enviados mediante broadcast.
+El sistema permite utilizar un filtro opcional por dirección MAC.
 
-Opcionalmente puede activarse un filtro por dirección MAC.
+Sin filtro, el receptor puede aceptar los mensajes ESP-NOW enviados mediante Broadcast.
 
-En ese caso se especifica la MAC del ESP8266 autorizado.
+Con el filtro activado se puede indicar qué ESP8266 está autorizado a controlar el receptor.
 
-Esto permite que el ESP32 ignore mensajes provenientes de otros emisores.
+Esto resulta útil cuando existen varios dispositivos ESP trabajando dentro de un mismo espacio.
 
 ---
 
 # Configuración persistente
 
-La configuración se almacena utilizando **EEPROM**.
+La configuración realizada desde la interfaz se almacena mediante EEPROM.
 
-Esto permite conservar las cards y parámetros configurados aunque el ESP32 se reinicie o pierda alimentación.
+Esto permite conservar la configuración aunque el ESP32 sea apagado o reiniciado.
 
-Entre los datos almacenados se encuentran:
+Se almacenan datos como:
 
-- cards;
-- entradas;
-- salidas;
-- GPIO;
-- modos;
-- inversión de lógica;
-- tiempos de retención;
-- filtro MAC.
+- Módulos.
+- GPIO.
+- Tipos de entrada.
+- Tipos de salida.
+- Modos de funcionamiento.
+- Tiempo de retención.
+- Inversión.
+- Filtro MAC.
+
+De esta manera no es necesario volver a configurar el sistema cada vez que se enciende.
 
 ---
 
-# Conexión electrónica utilizada en las pruebas
+# Conexión electrónica del prototipo
 
-> **Importante:** las siguientes conexiones corresponden únicamente al prototipo utilizado para validar el sistema.
+> **Importante:** las siguientes conexiones corresponden al prototipo utilizado para realizar las pruebas. No representan una limitación del sistema.
 
 ## ESP8266 - Emisor
 
-### Pulsadores
+El montaje utilizado para las pruebas incluye:
 
 ```text
-GPIO5  ---- Pulsador ---- GND
-GPIO4  ---- Pulsador ---- GND
-GPIO14 ---- Pulsador ---- GND
+2 switches
+1 potenciómetro
 ```
 
-Equivalencias en NodeMCU:
+### Switches
+
+Los switches se conectan entre sus GPIO correspondientes y GND.
 
 ```text
-D1 = GPIO5
-D2 = GPIO4
-D5 = GPIO14
+GPIO ---- Switch ---- GND
 ```
+
+Las entradas digitales utilizan la resistencia interna `INPUT_PULLUP` del ESP8266.
 
 ### Potenciómetro
+
+El potenciómetro se conecta de la siguiente manera:
 
 ```text
 3V3 ---- extremo del potenciómetro
@@ -507,17 +577,19 @@ GND ---- extremo del potenciómetro
 
 ---
 
-## ESP32 - Receptor
+# ESP32 - Receptor
 
-Las salidas pueden asignarse desde la interfaz web.
+Las salidas utilizadas durante las pruebas fueron conectadas a GPIO configurados desde la interfaz.
 
-Por ejemplo:
+Para comprobar visualmente el funcionamiento se utilizaron LEDs con resistencias.
 
 ```text
-GPIO25 ---- Resistencia ---- LED ---- GND
+GPIO ---- Resistencia 220 Ω ---- LED ---- GND
 ```
 
-Para otros actuadores debe utilizarse la electrónica de potencia o adaptación correspondiente cuando sea necesaria.
+Estos LEDs se utilizaron solamente para visualizar fácilmente el estado de las salidas durante el desarrollo.
+
+Para controlar motores, iluminación, relés u otros dispositivos puede ser necesario utilizar una etapa electrónica adicional adecuada al dispositivo conectado.
 
 ---
 
@@ -525,9 +597,13 @@ Para otros actuadores debe utilizarse la electrónica de potencia o adaptación 
 
 El proyecto fue desarrollado utilizando **Arduino IDE**.
 
-## Soporte ESP32
+Antes de cargar los programas es necesario instalar el soporte correspondiente para las placas ESP32 y ESP8266.
 
-Desde Arduino IDE:
+---
+
+## Instalación de ESP32
+
+En Arduino IDE ingresar a:
 
 ```text
 Herramientas
@@ -543,13 +619,36 @@ esp32 by Espressif Systems
 
 e instalar el paquete correspondiente.
 
-## Soporte ESP8266
+Una vez instalado se podrá seleccionar:
 
-Instalar el soporte para placas ESP8266 en Arduino IDE.
+```text
+ESP32 Dev Module
+```
 
-Guía utilizada durante el desarrollo:
+para programar el receptor.
+
+---
+
+# Instalación de ESP8266 / NodeMCU
+
+Para poder programar la placa NodeMCU utilizada como emisor es necesario instalar el soporte para **ESP8266** en Arduino IDE.
+
+La instalación agrega al entorno las definiciones y librerías necesarias para compilar y cargar programas en placas basadas en ESP8266.
+
+Una guía para realizar la instalación se encuentra en:
 
 [Usando ESP8266 con Arduino IDE - Naylamp Mechatronics](https://naylampmechatronics.com/blog/56_usando-esp8266-con-el-ide-de-arduino.html)
+
+Una vez instalado el soporte, seleccionar:
+
+```text
+Herramientas
+→ Placa
+→ ESP8266 Boards
+→ NodeMCU 1.0 (ESP-12E Module)
+```
+
+Este paso es necesario para poder compilar y cargar correctamente el firmware del emisor.
 
 ---
 
@@ -569,7 +668,7 @@ Placa utilizada:
 NodeMCU 1.0 (ESP-12E Module)
 ```
 
-## ESP32 - Receptor + Web
+## ESP32 - Receptor + interfaz web
 
 Archivo:
 
@@ -577,113 +676,131 @@ Archivo:
 ESP32_RECEPTOR_WEB_v6.ino
 ```
 
-Placa:
+Placa utilizada:
 
 ```text
 ESP32 Dev Module
 ```
 
+Cada archivo debe cargarse en la placa correspondiente mediante Arduino IDE.
+
 ---
 
 # Puesta en marcha
 
-1. Cargar el firmware del emisor en el ESP8266.
-2. Cargar el firmware del receptor en el ESP32.
-3. Alimentar ambas placas.
-4. Esperar a que el ESP32 genere la red WiFi.
-5. Desde un celular o computadora buscar:
+Una vez cargado el firmware en ambas placas:
+
+1. Encender el ESP8266.
+2. Encender el ESP32.
+3. Desde un celular, tablet o computadora buscar la red:
 
 ```text
 ESP-REMOTE-XXXX
 ```
 
-6. Conectarse utilizando:
+4. Conectarse utilizando la contraseña:
 
 ```text
 12345678
 ```
 
-7. Abrir en el navegador:
+5. Abrir un navegador.
+
+6. Ingresar:
 
 ```text
-192.168.4.1
+http://192.168.4.1
 ```
 
-8. Entrar a **Configuración**.
-9. Crear o modificar las cards.
-10. Seleccionar entradas y salidas.
-11. Guardar la configuración.
-12. Probar el funcionamiento desde el circuito físico o desde el dashboard.
+7. Abrir la sección de configuración.
+
+8. Crear o modificar los módulos.
+
+9. Seleccionar las entradas y salidas.
+
+10. Guardar la configuración.
+
+11. Volver al dashboard.
+
+12. Probar el funcionamiento utilizando los switches, el potenciómetro o los controles de la interfaz web.
 
 ---
 
 # Ejemplo de configuración
 
-## Pulsador
+## Módulo digital
 
-Entrada:
-
-```text
-ESP8266
-D1 / GPIO5
-Tipo: Digital
-```
-
-Salida:
+Un switch conectado al ESP8266 puede asociarse con una salida del ESP32.
 
 ```text
+Switch
+   │
+   ▼
+GPIO ESP8266
+   │
+   │ ESP-NOW
+   ▼
 ESP32
-GPIO25
-Tipo: Digital
+   │
+   ▼
+GPIO de salida
 ```
 
-Resultado:
+Desde la interfaz se selecciona:
 
 ```text
-Pulsador GPIO5
-       │
-       │ ESP-NOW
-       ▼
-    ESP32
-       │
-       ▼
-Salida GPIO25
+Entrada: Digital
+GPIO de entrada: GPIO correspondiente del ESP8266
+
+Salida: Digital
+GPIO de salida: GPIO correspondiente del ESP32
 ```
 
-## Potenciómetro
+---
 
-Entrada:
+## Módulo analógico
+
+El potenciómetro conectado a A0 puede asociarse con una salida PWM.
 
 ```text
+Potenciómetro
+      │
+      ▼
+     A0
+      │
+      ▼
 ESP8266
-A0 / ADC0
-Tipo: Analógica
-```
-
-Salida:
-
-```text
+      │
+   ESP-NOW
+      ▼
 ESP32
-GPIO configurado
-Tipo: PWM
+      │
+      ▼
+Salida PWM
 ```
 
-El movimiento del potenciómetro modifica proporcionalmente el valor PWM de la salida.
+El movimiento del potenciómetro modifica progresivamente el valor de la salida.
+
+Estas asociaciones pueden configurarse desde la interfaz web sin modificar el firmware.
 
 ---
 
 # Demostración
 
-Se realizó una demostración del prototipo donde puede observarse:
+Se realizó una demostración del prototipo final donde puede observarse el funcionamiento completo del sistema:
 
-- funcionamiento de las entradas físicas;
-- comunicación inalámbrica mediante ESP-NOW;
-- respuesta de las salidas;
-- dashboard;
-- configuración mediante la interfaz web;
-- control desde celular o computadora.
+- Conexión a la red `ESP-REMOTE-XXXX`.
+- Acceso mediante `192.168.4.1`.
+- Interfaz web.
+- Creación y configuración de módulos.
+- Funcionamiento de los dos switches.
+- Funcionamiento del potenciómetro.
+- Comunicación mediante ESP-NOW.
+- Respuesta de las salidas.
+- Control desde el dashboard.
+- Configuración desde celular o computadora.
 
-▶️ **[Ver demostración del proyecto](URL_DE_LA_DEMOSTRACION)**
+▶️ **[Ver demostración del funcionamiento de ESP Remote]https://www.youtube.com/watch?v=NwaHQkucDmQ**
 
 > Reemplazar `URL_DE_LA_DEMOSTRACION` por el enlace definitivo al video.
 
@@ -691,7 +808,7 @@ Se realizó una demostración del prototipo donde puede observarse:
 
 # Aplicaciones posibles
 
-ESP Remote fue desarrollado como una base adaptable a diferentes proyectos.
+ESP Remote fue desarrollado como una plataforma adaptable a diferentes proyectos.
 
 Algunas posibles aplicaciones son:
 
@@ -699,14 +816,15 @@ Algunas posibles aplicaciones son:
 - Performances audiovisuales.
 - Instrumentos musicales experimentales.
 - Control inalámbrico de iluminación.
-- Interacción con sensores.
+- Interacción mediante sensores.
 - Activación remota de dispositivos.
 - Prototipos de interacción física.
-- Electrónica creativa y educativa.
+- Electrónica creativa.
+- Experiencias educativas.
 - Automatizaciones.
 - Domótica.
 
-El objetivo no es definir una única aplicación, sino ofrecer una estructura configurable sobre la cual puedan construirse diferentes sistemas interactivos.
+El objetivo no es definir una única aplicación, sino ofrecer una estructura configurable sobre la cual puedan desarrollarse diferentes sistemas interactivos.
 
 ---
 
@@ -715,21 +833,27 @@ El objetivo no es definir una única aplicación, sino ofrecer una estructura co
 Durante el desarrollo se probaron:
 
 - Comunicación ESP-NOW entre ESP8266 y ESP32.
-- Transmisión ESP-NOW Broadcast.
-- Entradas digitales.
-- Entrada analógica A0.
+- Transmisión mediante Broadcast.
+- Dos entradas digitales mediante switches.
+- Entrada analógica mediante potenciómetro.
 - Salidas digitales.
 - Salidas PWM.
-- Conversión analógica 0-1023 a PWM 0-255.
-- Modos llave y pulsador.
+- Configuración mediante interfaz web.
+- Acceso desde celular.
+- Acceso desde computadora.
+- Dashboard.
+- Creación de módulos.
+- Eliminación de módulos.
+- Módulos con entrada física.
+- Módulos sin entrada física.
+- Modo switch.
+- Modo pulsador.
 - Retención temporizada.
 - Inversión de lógica.
-- Control desde dashboard.
-- Cards sin entrada física.
-- Prueba de salidas desde la configuración.
+- Control PWM.
+- Prueba de salidas desde la interfaz.
 - Filtro por MAC Address.
-- Almacenamiento de configuración en EEPROM.
-- Creación y eliminación de cards.
+- Persistencia mediante EEPROM.
 - Asociación configurable entre GPIO de entrada y salida.
 
 ---
@@ -742,5 +866,6 @@ Proyecto académico desarrollado en 2026 en el marco del grupo de estudio:
 
 **“Aplicación de recursos de Internet de las cosas en proyectos de Artes Electrónicas”**
 
-Laboratorio de Arte Electrónico e Inteligencia Artificial (LAEIA)  
+Laboratorio de Arte Electrónico e Inteligencia Artificial (LAEIA)
+
 Universidad Nacional de Tres de Febrero (UNTREF)
